@@ -4,7 +4,7 @@
   "author": "ice_fly",
   "version": "0.6",
   "appPath": "app/cast.html",
-  "serviceFile": "service.js", 
+  "serviceFile": "app/service.js", 
   "icon": "icon.png",
   "evaluateScriptOnDocumentStart": false,
   "keys": [
