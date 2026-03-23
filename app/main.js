@@ -33,19 +33,41 @@
 
         setInterval(() => { //OpCode 6 sync
             if (receiver && receiver.isStreaming && receiver.socket) {
+                const duration = isFinite(videoElement.duration) ? videoElement.duration : 0;
                 receiver.sendPlaybackUpdate(
-                    videoElement.currentTime, 
-                    videoElement.duration, 
+                    videoElement.currentTime || 0, 
+                    duration,
                     videoElement.paused
                 );
             }
         }, 2000);
 
-        receiver.start().then(() => {
-            updateIP();
-        });
+        startServer();
+        updateIP();
     }
+    
+    function startServer() {
+        try {
+            const wss = new WebSocketServer({ port: 46899 });
 
+            wss.on('connection', function(socket) {
+                console.log("TizenCast: Phone connected via WebSocket");
+                receiver.setSocket(socket); 
+                socket.on('message', (data) => {
+                    receiver.handleMessage({ data: data });
+                });
+                socket.on('close', () => {
+                    console.log("TizenCast: Phone disconnected");
+                    receiver.stop();
+                });
+            });
+
+            console.log("TizenCast: Server started on port 46899");
+        } catch (err) {
+            console.error("TizenCast: Failed to start server. Check privileges.", err);
+        }
+    }
+    
     function updateIP() { //Display IP
         const ipDisplay = document.getElementById('ip-info');
         if (!ipDisplay) return;
