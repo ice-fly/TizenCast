@@ -1,18 +1,40 @@
 class FCastReceiver {
-    constructor(port = 46899) {
-        this.port = port;
+    constructor() {
         this.events = {};
         this.isStreaming = false;
         this.socket = null;
         
         this.OpCodes = {
-            Play: 1, Pause: 2, Resume: 3, Stop: 4, Seek: 5,
-            PlaybackUpdate: 6, SetVolume: 8, Ping: 12, Pong: 13, Initial: 14
+            Play: 1, 
+            Pause: 2, 
+            Resume: 3, 
+            Stop: 4, 
+            Seek: 5,
+            PlaybackUpdate: 6, 
+            SetVolume: 8, 
+            Ping: 12, 
+            Pong: 13, 
+            Initial: 14
         };
+    }
+
+    setSocket(socket) {
+        this.socket = socket;
+        if (this.socket) {
+            this.socket.binaryType = 'arraybuffer';
+        }
     }
 
     on(event, callback) { this.events[event] = callback; }
     emit(event, data) { if (this.events[event]) this.events[event](data); }
+    sendPlaybackUpdate(currentTime, duration, isPaused) {
+        this.sendMessage(this.OpCodes.PlaybackUpdate, {
+            time: currentTime || 0,
+            duration: duration || 0,
+            state: isPaused ? 2 : 1, // 1 = Playing, 2 = Paused
+            speed: 1.0
+        });
+    }
 
     sendMessage(opcode, body = {}) {
         try {
@@ -29,59 +51,47 @@ class FCastReceiver {
 
             this.socket.send(packet);
         } catch (err) {
-            console.error("FCast SDK: Failed to send packet:", err);
+            console.error("FCast SDK: Send error", err);
         }
     }
 
     handleMessage(event) {
         try {
-            if (!(event.data instanceof ArrayBuffer)) { // Validate that we actually received binary data
-                throw new Error("Received non-binary data. FCast v3 requires ArrayBuffer.");
-            }
-            if (event.data.byteLength < 5) { //Packet must be at least 5 bytes (4 size + 1 opcode)
-                throw new Error(`Packet too small: ${event.data.byteLength} bytes`);
-            }
-            const { opcode, body } = this.parsePacket(event.data);
+            if (!event.data || !(event.data instanceof ArrayBuffer)) return;
+            if (event.data.byteLength < 5) return;
 
-            if (!Object.values(this.OpCodes).includes(opcode)) {// Validate OpCode existence
-                console.warn(`FCast SDK: Received unknown OpCode (${opcode}). Ignoring.`);
-                return;
-            }
-            this.processOpCode(opcode, body);
-        } catch (err) {
-            console.error("FCast SDK Error Boundary: Malformed packet received.", err);
-        }
-    }
-
-    parsePacket(arrayBuffer) {
-        const view = new DataView(arrayBuffer);
-        const opcode = view.getUint8(4);
-        const bodyBytes = new Uint8Array(arrayBuffer, 5);
-        
-        let body = {};
-        if (bodyBytes.length > 0) {
+            const view = new DataView(event.data);
+            const opcode = view.getUint8(4);
+            const bodyBytes = new Uint8Array(event.data, 5);
+            
+            let body = {};
             try {
                 const decoder = new TextDecoder("utf-8");
-                body = JSON.parse(decoder.decode(bodyBytes));
-            } catch (jsonErr) {
-                console.warn("FCast SDK: Failed to parse JSON body for opcode", opcode);
+                const jsonStr = decoder.decode(bodyBytes);
+                body = jsonStr ? JSON.parse(jsonStr) : {};
+            } catch (e) {
+                console.warn("FCast SDK: JSON parse failed for OpCode", opcode);
             }
+
+            this.processCommand(opcode, body);
+        } catch (err) {
+            console.error("FCast SDK: Packet processing crash prevented", err);
         }
-        return { opcode, body };
     }
 
-    processOpCode(opcode, body) {
+    processCommand(opcode, body) { //Logic
         switch (opcode) {
             case this.OpCodes.Ping:
                 this.sendMessage(this.OpCodes.Pong);
                 break;
             case this.OpCodes.Initial:
-                this.emit('connect', { name: body.displayName || "Unknown Device" });
+                this.emit('connect', { name: body.displayName || "Mobile Device" });
                 break;
             case this.OpCodes.Play:
-                if (!body.url) throw new Error("Play command missing URL");
-                this.isStreaming = true;
-                this.emit('stream', { url: body.url });
+                if (body.url) {
+                    this.isStreaming = true;
+                    this.emit('stream', { url: body.url });
+                }
                 break;
             case this.OpCodes.Pause:
                 this.emit('pause');
@@ -101,8 +111,10 @@ class FCastReceiver {
         }
     }
 
-    start() { return Promise.resolve(); }
-    
+    start() { 
+        return Promise.resolve(); 
+    }
+
     stop() {
         this.isStreaming = false;
         this.emit('stop');
