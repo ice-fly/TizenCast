@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+      <meta charset="utf-8" /> <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+      <title>TizenCast</title>
+      
+      <script src="fcast-receiver-sdk.js"></script> <script src="main.js"></script>
+  
+      <style>
+          :root {
+              --accent-color: #3498db;
+              --bg-gradient: radial-gradient(circle at center, #1a1a2e 0%, #020205 100%);
+          }
+  
+          body, html {
+              margin: 0; padding: 0;
+              width: 100%; height: 100%;
+              background: #000; color: #fff;
+              font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+              overflow: hidden;
+          }
+  
+          /* Ambient Background when idle */
+          #idle-screen {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              background: var(--bg-gradient);
+              transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1), transform 1s ease;
+              z-index: 5;
+          }
+  
+          .logo-container {
+              position: relative;
+              margin-bottom: 40px;
+          }
+  
+          #cast-logo {
+              width: 180px;
+              filter: drop-shadow(0 0 30px rgba(52, 152, 219, 0.4));
+              animation: pulse 4s infinite ease-in-out;
+          }
+  
+          @keyframes pulse {
+              0%, 100% { transform: scale(1); opacity: 0.8; }
+              50% { transform: scale(1.05); opacity: 1; }
+          }
+  
+          #status {
+              font-size: 2rem;
+              font-weight: 300;
+              letter-spacing: 2px;
+              text-transform: uppercase;
+              margin-bottom: 10px;
+              background: linear-gradient(to right, #fff, var(--accent-color));
+              -webkit-background-clip: text;
+              -webkit-text-fill-color: transparent;
+          }
+  
+          .instructions {
+              font-size: 1.1rem;
+              color: rgba(255, 255, 255, 0.6);
+              font-weight: 300;
+          }
+  
+          /* Video Player Styling */
+          #player {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100vw;
+              height: 100vh;
+              background: #000;
+              display: none;
+              z-index: 10;
+          }
+  
+          /* UI States */
+          body.casting #idle-screen {
+              opacity: 0;
+              transform: scale(1.1);
+              pointer-events: none;
+          }
+  
+          body.casting #player {
+              display: block;
+          }
+  
+          /* Loading Spinner for transitions */
+          #loader {
+              position: absolute;
+              border: 4px solid rgba(255,255,255,0.1);
+              border-left-color: var(--accent-color);
+              border-radius: 50%;
+              width: 40px;
+              height: 40px;
+              animation: spin 1s linear infinite;
+              display: none;
+              bottom: 50px;
+          }
+  
+          @keyframes spin { to { transform: rotate(360deg); } }
+      </style>
+  </head>
+  <body>
+  
+      <div id="idle-screen">
+          <div class="logo-container">
+              <img src="../icon.png" id="cast-logo" alt="TizenCast Logo">
+          </div>
+          <div id="status">Ready to Cast</div>
+          <div class="instructions">Open Grayjay or FCast on Android to begin</div>
+          <div id="loader"></div>
+      </div>
+  
+      <video id="player" crossorigin="anonymous"></video>
+  
+      <script>
+          const video = document.getElementById('player');
+          const body = document.body;
+          const loader = document.getElementById('loader');
+  
+          /**
+           * Slick Transition Logic
+           */
+          function showPlayer() {
+              body.classList.add('casting');
+              loader.style.display = 'none';
+          }
+  
+          function hidePlayer() {
+              body.classList.remove('casting');
+              video.pause();
+              video.src = "";
+              video.load(); // Clear buffer
+          }
+  
+          /**
+           * Handle incoming FCast Events
+           * These hooks rely on the main.js logic from FUTO
+           */
+          window.addEventListener('fcast-receive-start', () => {
+              loader.style.display = 'block';
+          });
+  
+          window.addEventListener('fcast-stream-start', (e) => {
+              showPlayer();
+              // If the event provides a URL directly
+              if (e.detail && e.detail.url) {
+                  video.src = e.detail.url;
+                  video.play();
+              }
+          });
+  
+          window.addEventListener('fcast-stream-stop', () => {
+              hidePlayer();
+          });
+  
+          /**
+           * Tizen Remote Key Handling
+           */
+          window.addEventListener('keydown', function(e) {
+              switch(e.keyCode) {
+                  case 10009: // RETURN / BACK
+                      if (body.classList.contains('casting')) {
+                          // If casting, stop the stream but stay in app
+                          hidePlayer();
+                          if (window.fcast) window.fcast.stop(); 
+                          e.preventDefault();
+                      }
+                      break;
+                  case 415: // MediaPlay
+                      video.play(); break;
+                  case 19:  // MediaPause
+                      video.pause(); break;
+                  case 413: // MediaStop
+                      hidePlayer(); break;
+                  // Volume keys are usually handled by the System OS 
+                  // but mapping them here ensures the app acknowledges them
+                  case 447: // Vol Up
+                  case 448: // Vol Down
+                      break; 
+              }
+          });
+  
+          // Log initialization
+          console.log("TizenCast UI Initialized. Awaiting FCast signal...");
+      </script>
+  </body>
+</html>
