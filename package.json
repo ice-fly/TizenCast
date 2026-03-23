@@ -1,0 +1,14 @@
+{
+  "packageType": "app",
+  "appName": "TizenCast",
+  "author": "ice_fly",
+  "version": "0.5",
+  "appPath": "app/cast.html", "icon": "icon.png",
+  "evaluateScriptOnDocumentStart": false,
+  "keys": [
+    "MediaPlay", "MediaPause", "MediaStop", "MediaRewind", "MediaFastForward",
+    "VolumeUp", "VolumeDown", "VolumeMute",
+    "Return", "Exit"
+  ],
+  "description": "Chromecast to Samsung via TizenBrew/FCast"
+}
